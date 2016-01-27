@@ -9,7 +9,6 @@ class PinPlus_ShippingFilters_Model_Sales_Quote_Address extends Mage_Sales_Model
      */
     public function getGroupedAllShippingRates()
     {
-        $rates = array();
         foreach ($this->getShippingRatesCollection() as $rate) {
             $code = $rate->getCode();
             $carrier = $rate->getCarrier();
