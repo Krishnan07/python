@@ -1,0 +1,85 @@
+<?php
+
+class PinPlus_ShippingFilters_Model_Sales_Quote_Address extends Mage_Sales_Model_Quote_Address
+{
+    /**
+     * Retrieve all grouped shipping rates
+     *
+     * @return array
+     */
+    public function getGroupedAllShippingRates()
+    {
+        $rates = array();
+        foreach ($this->getShippingRatesCollection() as $rate) {
+            $code = $rate->getCode();
+            $carrier = $rate->getCarrier();
+            if (Mage::getStoreConfig('carriers/'.$carrier.'/freeshipping', $this->getstoreCode())) {
+                $ship_code = Mage::getStoreConfig('carriers/'.$carrier.'/freeShippingMethod', $this->getstoreCode());
+                $ship_methods=explode(",",$ship_code);
+                $temp_code = str_replace($carrier."_","",$code);
+                if ((in_array($temp_code,$ship_methods))){
+                    $rate->setPrice(0);
+                    $rate->save();
+                }
+            }
+            if ($this->applyShippingFilter($code)) {
+                if (!$rate->isDeleted() && $rate->getCarrierInstance()) {
+                    if (!isset($rates[$rate->getCarrier()])) {
+                        $rates[$rate->getCarrier()] = array();
+                    }
+                    $rates[$rate->getCarrier()][] = $rate;
+                    $rates[$rate->getCarrier()][0]->carrier_sort_order = $rate->getCarrierInstance()->getSortOrder();
+                }
+            }
+        }
+        if((Mage::getStoreConfig('carriers/freeshipping/active', $this->getstoreCode()))) {
+            unset($rates['fedex']);
+            unset($rates['ups']);
+        }
+        else{
+            unset($rates['freeshipping']);
+        }
+        uasort($rates, array($this, '_sortRates'));
+        return $rates;
+    }
+
+    /**
+     * Check if carrier can be used by customer groups
+     *
+     * @return boolean
+     */
+    protected function applyShippingFilter($code)
+    {
+        if (Mage::app()->getStore()->isAdmin()) {
+            $customer = Mage::getSingleton('adminhtml/session_quote')->getCustomer();
+        } else {
+            /* @var $customer Mage_Customer_Model_Customer */
+            $customer = Mage::helper('customer')->getCustomer();
+        }
+        if (Mage::helper('shippingfilters')->moduleActive()) {
+
+            $group = Mage::getModel('customer/group')->load($customer->getGroupId());
+            $allowed_methods = unserialize($group->getAllowedShippingMethods());
+
+            if (!empty($allowed_methods)) {
+
+                foreach ($allowed_methods as $allowed_method) {
+                    if ($code == $allowed_method) {
+                        return true;
+                    }
+                }
+            } else {
+                return true;
+            }
+        } else {
+            return true;
+        }
+    }
+
+    public function collectShippingRates()
+    {
+        $this->getGroupedAllShippingRates();
+
+        return parent::collectShippingRates();
+    }
+}
